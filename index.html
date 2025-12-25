@@ -120,11 +120,11 @@ async function genereaza(){
     method:"POST",
     body:fd
   });
-
-  if(!r.ok){
-    status.textContent = "Eroare: " + r.status;
-    return;
-  }
+if(!r.ok){
+  const t = await r.text();
+  status.textContent = "Eroare: " + r.status + " / " + t;
+  return;
+}
 
   const blob = await r.blob();
   out.src = URL.createObjectURL(blob);
