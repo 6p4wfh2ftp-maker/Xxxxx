@@ -1,208 +1,112 @@
 <!doctype html>
 <html lang="ro">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Fațadă — Randare AI</title>
-  <style>
-    :root{
-      --bg:#0b0c10; --panel:#11131a; --ink:#e9eef7; --muted:#aab4c3; --line:#222738;
-      --btn:#1f2937; --accent:#3b82f6; --danger:#7f1d1d;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;background:var(--bg);color:var(--ink)}
-    .bar{position:sticky;top:0;z-index:5;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 14px;background:#0f1118;border-bottom:1px solid var(--line)}
-    .title{font-weight:800}
-    .wrap{max-width:1100px;margin:18px auto;padding:0 14px;display:grid;grid-template-columns:380px 1fr;gap:14px}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--btn);
-      color:var(--ink);padding:10px 12px;border-radius:12px;font-weight:700;cursor:pointer}
-    .btn.primary{background:var(--accent);border-color:transparent}
-    .btn.danger{background:var(--danger);border-color:transparent}
-    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-    input[type=file]{width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);background:#0f1118;color:var(--ink)}
-    .status{margin-top:10px;color:var(--muted);font-size:13px;white-space:pre-wrap}
-    .resultBox{min-height:360px;display:flex;align-items:center;justify-content:center}
-    .resultBox img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line)}
-    .hint{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.35}
-    .small{font-size:12px;color:var(--muted);margin:8px 0 0}
-    @media (max-width:900px){.wrap{grid-template-columns:1fr}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fațadă – Randare AI</title>
+
+<style>
+body{margin:0;font-family:Arial;background:#0b0c10;color:#e9eef7}
+.wrap{max-width:1100px;margin:20px auto;padding:0 14px;display:grid;grid-template-columns:380px 1fr;gap:14px}
+.card{background:#11131a;border:1px solid #222738;border-radius:14px;padding:14px}
+h3{margin:0 0 10px}
+input,textarea,button{width:100%;padding:10px;border-radius:10px;border:1px solid #222738;background:#0f1118;color:#e9eef7}
+textarea{min-height:90px}
+button{background:#3b82f6;border:none;font-weight:700;cursor:pointer}
+.status{margin-top:10px;color:#aab4c3}
+.result img{max-width:100%;border-radius:12px;border:1px solid #222738}
+.small{font-size:12px;color:#aab4c3}
+</style>
 </head>
+
 <body>
-  <div class="bar">
-    <div class="title">Fațadă — Randare AI (prompt automat)</div>
-    <div class="row">
-      <button class="btn" id="btnSave" type="button">Salvează / Share</button>
-      <button class="btn danger" id="btnReset" type="button">Șterge tot</button>
+
+<div class="wrap">
+  <div class="card">
+    <h3>1️⃣ Poză fațadă</h3>
+    <input type="file" id="file" accept="image/*">
+
+    <h3 style="margin-top:14px">2️⃣ Micro-corecții (opțional)</h3>
+    <textarea id="micro" placeholder="Ex: fără coloane pe laterale, ancadramente simple..."></textarea>
+
+    <button id="run" style="margin-top:14px">Randare AI</button>
+    <div class="status" id="status">Gata.</div>
+
+    <div class="small">
+      Promptul general este automat și nu poate fi modificat.<br>
+      Acest câmp este doar pentru ajustări punctuale.
     </div>
   </div>
 
-  <div class="wrap">
-    <div class="card">
-      <h3 style="margin:0 0 10px">1) Încarcă poza fațadei</h3>
-      <input id="file" type="file" accept="image/*" />
-
-      <div class="row">
-        <button class="btn primary" id="btnRun" type="button">Randare AI</button>
-      </div>
-
-      <div class="status" id="status">Gata.</div>
-
-      <div class="hint">
-        Promptul este automat (general, anti-modificări structurale).<br/>
-        Dacă rezultatul schimbă structura, repetă randarea de 3–5 ori și păstrează varianta bună.
-      </div>
-
-      <div class="small">
-        Notă: dacă primești eroare de billing/cheie, mesajul complet apare aici.
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin:0 0 10px">Rezultat</h3>
-      <div class="resultBox" id="box">
-        <div style="color:var(--muted)">Încarcă o poză ca să începi.</div>
-      </div>
-    </div>
+  <div class="card result" id="result">
+    <div class="small">Rezultatul apare aici.</div>
   </div>
+</div>
 
 <script>
-  // 1) URL Worker (Cloudflare) — lasă-l exact așa dacă e al tău:
-  const WORKER_URL = "https://fatada-render.6p4wfh2ftp.workers.dev/";
+const WORKER_URL = "https://fatada-render.6p4wfh2ftp.workers.dev/";
 
-  // 2) MASTER PROMPT (automat, general)
-  const MASTER_PROMPT = `
+const MASTER_PROMPT = `
 EDIT THE PROVIDED IMAGE ONLY.
 
 REFERENCE IMAGE:
 The uploaded image represents a REAL, EXISTING residential building.
-This image is a FIXED architectural reference and must be preserved.
 
-ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE):
-- Preserve 100% the original building:
-  • overall volume and footprint
-  • number of floors
-  • roof shape, slope, edges and height
-  • slabs, beams, columns and pillars positions
-  • window and door positions, sizes and proportions
-  • balconies, terraces and existing structural elements
-- Do NOT add, remove, resize or relocate any architectural or structural element
-- Do NOT redesign the building
-- Do NOT generate a new building or alter the original geometry
+ABSOLUTE CONSTRAINTS:
+- Preserve volume, floors, roof, slabs, pillars, windows, doors
+- No structural or architectural changes
+- No redesign, no new building
 
-ALLOWED OPERATIONS ONLY:
-- Visually APPLY decorative facade elements ON TOP of existing surfaces
-- All decorative elements must be:
-  • attached (flat or semi-flat)
-  • non-structural
-  • realistic and buildable in real life
-  • proportional to the existing facade
+ALLOWED:
+- Applied decorative facade elements only
+- Flat / semi-flat, realistic, buildable
 
-DECORATIVE ELEMENTS THAT MAY BE APPLIED (WHEN COMPATIBLE):
-- applied classical or neoclassical pilasters / flat columns aligned with existing pillars or wall axes
-- window and door frames (ancadramente), simple and elegant
-- horizontal decorative bands (brau) placed strictly between existing floors or levels
-- cornices placed directly under the existing roof edge or eaves
-- subtle decorative profiles for facade articulation
+STYLE:
+Classical / Neoclassical
+Clean, realistic, residential
 
-STYLE GUIDELINES:
-- Classical / Neoclassical facade treatment
-- Clean, balanced, elegant proportions
-- Suitable for real residential buildings (no palace, no mansion exaggerations)
-- Context-appropriate for European / Romanian residential architecture
+FORBIDDEN:
+- New balconies, roofs, volumes
+- Changed windows or proportions
 
-FORBIDDEN ELEMENTS:
-- free-standing columns
-- new balconies, terraces or roofs
-- new volumes or extensions
-- changes to facade rhythm or window layout
-- covering or blocking windows and doors
-- luxury villa, palace or fantasy architecture
-- modernist, futuristic or abstract styles
-
-FINAL OUTPUT REQUIREMENT:
-Produce a photorealistic facade visualization that shows
-THE SAME BUILDING as in the reference image,
-unchanged structurally,
-with ONLY applied decorative facade profiles.
-
-If any structural or architectural change is made,
-the result is INVALID.
+FINAL:
+Same building, unchanged structure, only decorative profiles applied.
 `.trim();
 
-  const fileInput = document.getElementById("file");
-  const btnRun    = document.getElementById("btnRun");
-  const btnReset  = document.getElementById("btnReset");
-  const btnSave   = document.getElementById("btnSave");
-  const statusEl  = document.getElementById("status");
-  const box       = document.getElementById("box");
+document.getElementById("run").onclick = async () => {
+  const file = document.getElementById("file").files[0];
+  const micro = document.getElementById("micro").value.trim();
+  const status = document.getElementById("status");
+  const result = document.getElementById("result");
 
-  let outImg = null;
+  if(!file){ alert("Încarcă o poză"); return; }
 
-  function setResultImg(src){
-    box.innerHTML = "";
-    outImg = document.createElement("img");
-    outImg.src = src;
-    box.appendChild(outImg);
+  const prompt = micro
+    ? MASTER_PROMPT + "\n\nPROJECT-SPECIFIC ADJUSTMENTS:\n" + micro
+    : MASTER_PROMPT;
+
+  const fd = new FormData();
+  fd.append("image", file, "input.jpg");
+  fd.append("prompt", prompt);
+
+  status.textContent = "Se generează...";
+  result.innerHTML = "<div class='small'>Se generează...</div>";
+
+  const r = await fetch(WORKER_URL,{method:"POST",body:fd});
+  if(!r.ok){
+    const t = await r.text();
+    status.textContent = "Eroare: " + r.status + " / " + t;
+    return;
   }
 
-  btnReset.addEventListener("click", () => {
-    fileInput.value = "";
-    statusEl.textContent = "Reset.";
-    box.innerHTML = '<div style="color:var(--muted)">Încarcă o poză ca să începi.</div>';
-    outImg = null;
-  });
-
-  btnSave.addEventListener("click", async () => {
-    if(!outImg) { alert("Nu ai încă o randare."); return; }
-    try{
-      const a = document.createElement("a");
-      a.href = outImg.src;
-      a.download = "randare.png";
-      a.click();
-      statusEl.textContent = "Am pornit descărcarea (pe iOS: long-press pe imagine → Save/Share).";
-    }catch(e){
-      alert("Pe iOS: ține apăsat pe imagine → Save Image / Share.");
-    }
-  });
-
-  btnRun.addEventListener("click", async () => {
-    if(!fileInput.files || !fileInput.files[0]) {
-      alert("Încarcă o poză!");
-      return;
-    }
-
-    statusEl.textContent = "Se generează...";
-    box.innerHTML = '<div style="color:var(--muted)">Se generează...</div>';
-
-    const fd = new FormData();
-    // IMPORTANT: punem nume fișier (ajută pe iOS)
-    fd.append("image", fileInput.files[0], "input.jpg");
-    // Prompt automat:
-    fd.append("prompt", MASTER_PROMPT);
-
-    let r;
-    try{
-      r = await fetch(WORKER_URL, { method:"POST", body: fd });
-    }catch(e){
-      statusEl.textContent = "Eroare conexiune: " + (e?.message || e);
-      box.innerHTML = '<div style="color:var(--muted)">Eroare conexiune.</div>';
-      return;
-    }
-
-    if(!r.ok){
-      const t = await r.text().catch(()=> "");
-      statusEl.textContent = "Eroare: " + r.status + (t ? " / " + t : " / (fără mesaj)");
-      box.innerHTML = '<div style="color:var(--muted)">Eroare la randare.</div>';
-      return;
-    }
-
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    setResultImg(url);
-    statusEl.textContent = "Gata ✅";
-  });
+  const blob = await r.blob();
+  const img = document.createElement("img");
+  img.src = URL.createObjectURL(blob);
+  result.innerHTML = "";
+  result.appendChild(img);
+  status.textContent = "Gata ✅";
+};
 </script>
+
 </body>
 </html>
