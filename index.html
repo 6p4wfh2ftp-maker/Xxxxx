@@ -7,15 +7,20 @@
 
 <style>
 body{margin:0;font-family:Arial;background:#0b0c10;color:#e9eef7}
-.wrap{max-width:1100px;margin:20px auto;padding:0 14px;display:grid;grid-template-columns:380px 1fr;gap:14px}
+.wrap{max-width:1100px;margin:20px auto;padding:0 14px;display:grid;grid-template-columns:420px 1fr;gap:14px}
 .card{background:#11131a;border:1px solid #222738;border-radius:14px;padding:14px}
 h3{margin:0 0 10px}
+label{display:block;margin-top:12px;margin-bottom:6px;color:#aab4c3;font-size:13px}
 input,textarea,button{width:100%;padding:10px;border-radius:10px;border:1px solid #222738;background:#0f1118;color:#e9eef7}
 textarea{min-height:90px}
 button{background:#3b82f6;border:none;font-weight:700;cursor:pointer}
-.status{margin-top:10px;color:#aab4c3}
+.status{margin-top:10px;color:#aab4c3;white-space:pre-wrap}
 .result img{max-width:100%;border-radius:12px;border:1px solid #222738}
-.small{font-size:12px;color:#aab4c3}
+.small{font-size:12px;color:#aab4c3;line-height:1.35}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #222738;background:#0f1118;color:#aab4c3;font-size:12px;margin-left:8px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.half{flex:1;min-width:160px}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
 </style>
 </head>
 
@@ -23,18 +28,29 @@ button{background:#3b82f6;border:none;font-weight:700;cursor:pointer}
 
 <div class="wrap">
   <div class="card">
-    <h3>1️⃣ Poză fațadă</h3>
-    <input type="file" id="file" accept="image/*">
+    <h3>Randare fațadă (cu stil din altă poză)</h3>
 
-    <h3 style="margin-top:14px">2️⃣ Micro-corecții (opțional)</h3>
-    <textarea id="micro" placeholder="Ex: fără coloane pe laterale, ancadramente simple..."></textarea>
+    <label>1️⃣ Poză principală (casa reală) <span class="badge">obligatoriu</span></label>
+    <input type="file" id="fileMain" accept="image/*">
 
-    <button id="run" style="margin-top:14px">Randare AI</button>
+    <label>2️⃣ Poză de inspirație / stil <span class="badge">opțional</span></label>
+    <input type="file" id="fileStyle" accept="image/*">
+
+    <label>3️⃣ Micro-corecții (opțional)</label>
+    <textarea id="micro" placeholder="Ex: coloane corintice subțiri, ancadramente simple, fără chei de boltă..."></textarea>
+
+    <div class="row" style="margin-top:12px">
+      <button class="half" id="run">Randare AI</button>
+      <button class="half" id="clear" style="background:#7f1d1d">Șterge tot</button>
+    </div>
+
     <div class="status" id="status">Gata.</div>
 
-    <div class="small">
-      Promptul general este automat și nu poate fi modificat.<br>
-      Acest câmp este doar pentru ajustări punctuale.
+    <div class="small" style="margin-top:10px">
+      Reguli:
+      <br>• Imaginea 1 = structură FIXĂ (nu se schimbă).
+      <br>• Imaginea 2 = doar stil/ornamente de copiat (nu devine clădirea).
+      <br>• Dacă rezultatul schimbă structura, repetă randarea și/sau adaugă micro-corecții.
     </div>
   </div>
 
@@ -46,56 +62,85 @@ button{background:#3b82f6;border:none;font-weight:700;cursor:pointer}
 <script>
 const WORKER_URL = "https://fatada-render.6p4wfh2ftp.workers.dev/";
 
+// MASTER PROMPT universal (anti-modificări structurale) + instrucțiuni pentru imaginea de stil
 const MASTER_PROMPT = `
-EDIT THE PROVIDED IMAGE ONLY.
+EDIT THE PROVIDED IMAGES ONLY.
 
-REFERENCE IMAGE:
-The uploaded image represents a REAL, EXISTING residential building.
+REFERENCE IMAGES:
+- Image A (MAIN) is a REAL, EXISTING residential building and is the FIXED structural reference.
+- Image B (STYLE) is an inspiration reference only.
 
-ABSOLUTE CONSTRAINTS:
-- Preserve volume, floors, roof, slabs, pillars, windows, doors
-- No structural or architectural changes
-- No redesign, no new building
+ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE):
+- Preserve 100% the main building (Image A):
+  • volume/shape, number of floors, roof shape
+  • slabs/beams/pillars positions
+  • windows/doors positions and proportions
+  • balcony/terrace elements that already exist
+- Do NOT add, remove, move, resize windows/doors.
+- Do NOT redesign or generate a new house.
+- Do NOT change perspective or geometry of Image A.
 
-ALLOWED:
-- Applied decorative facade elements only
-- Flat / semi-flat, realistic, buildable
+STYLE TRANSFER GOAL (from Image B if provided):
+- Extract decorative language from Image B:
+  • column/pilaster type, capitals/bases, fluting
+  • window/door frame style and thickness
+  • cornice profile and horizontal bands
+  • color/material vibe (stone/white/cream)
+- Apply those decorative elements onto Image A ONLY, as attached (flat/semi-flat), buildable profiles.
+
+ALLOWED OPERATIONS ONLY:
+- Apply decorative facade profiles ON TOP of existing surfaces (non-structural).
+- Keep all openings fully visible (do not cover windows/doors).
 
 STYLE:
-Classical / Neoclassical
-Clean, realistic, residential
+Classical / Neoclassical, clean, realistic, residential (no palace/mansion exaggeration).
 
-FORBIDDEN:
-- New balconies, roofs, volumes
-- Changed windows or proportions
-
-FINAL:
-Same building, unchanged structure, only decorative profiles applied.
+FINAL OUTPUT:
+Photorealistic visualization of THE SAME building as Image A,
+unchanged structurally, only enhanced with applied decorative profiles.
+If structure changes → INVALID.
 `.trim();
 
+document.getElementById("clear").onclick = () => {
+  document.getElementById("fileMain").value = "";
+  document.getElementById("fileStyle").value = "";
+  document.getElementById("micro").value = "";
+  document.getElementById("status").textContent = "Reset.";
+  document.getElementById("result").innerHTML = "<div class='small'>Rezultatul apare aici.</div>";
+};
+
 document.getElementById("run").onclick = async () => {
-  const file = document.getElementById("file").files[0];
+  const mainFile = document.getElementById("fileMain").files[0];
+  const styleFile = document.getElementById("fileStyle").files[0] || null;
   const micro = document.getElementById("micro").value.trim();
   const status = document.getElementById("status");
   const result = document.getElementById("result");
 
-  if(!file){ alert("Încarcă o poză"); return; }
+  if(!mainFile){ alert("Încarcă poza principală (casa reală)."); return; }
 
-  const prompt = micro
+  const finalPrompt = micro
     ? MASTER_PROMPT + "\n\nPROJECT-SPECIFIC ADJUSTMENTS:\n" + micro
     : MASTER_PROMPT;
 
   const fd = new FormData();
-  fd.append("image", file, "input.jpg");
-  fd.append("prompt", prompt);
+  fd.append("image", mainFile, "main.jpg");               // Image A (main)
+  if (styleFile) fd.append("style_image", styleFile, "style.jpg"); // Image B (style)
+  fd.append("prompt", finalPrompt);
 
   status.textContent = "Se generează...";
   result.innerHTML = "<div class='small'>Se generează...</div>";
 
-  const r = await fetch(WORKER_URL,{method:"POST",body:fd});
+  let r;
+  try {
+    r = await fetch(WORKER_URL, { method:"POST", body: fd });
+  } catch (e) {
+    status.textContent = "Eroare conexiune: " + (e?.message || e);
+    return;
+  }
+
   if(!r.ok){
-    const t = await r.text();
-    status.textContent = "Eroare: " + r.status + " / " + t;
+    const t = await r.text().catch(()=> "");
+    status.textContent = "Eroare: " + r.status + (t ? " / " + t : "");
     return;
   }
 
